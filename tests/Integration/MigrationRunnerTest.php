@@ -32,6 +32,10 @@ final class MigrationRunnerTest extends TestCase{
     }
 
     protected function tearDown(): void{
+        if (!isset($this->pdo)) {
+            return;
+        }
+
         $this->pdo->exec('DROP SCHEMA ' . $this->schema . ' CASCADE');
     }
 
