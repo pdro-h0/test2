@@ -5,24 +5,27 @@
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
 	"image": "mcr.microsoft.com/devcontainers/php:4-8.5-trixie",
 
-	// Features to add to the dev container. More info: https://containers.dev/features.
-	// "features": {},
-
 	// Configure tool-specific properties.
 	// "customizations": {},
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	"forwardPorts": [
-		8080
+		8080,
+		8025,
+		15672
 	],
 	"features": {
 		"ghcr.io/devcontainers/features/common-utils:2": {},
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {
+			"moby": false
+		},
 		"ghcr.io/stuartleeks/dev-container-features/shell-history:0": {},
 		"ghcr.io/devcontainers-extra/features/zsh-plugins:0": {}
-	}
+	},
 
-	// Use 'postCreateCommand' to run commands after the container is created.
-	// "postCreateCommand": "sudo chmod a+x \"$(pwd)\" && sudo rm -rf /var/www/html && sudo ln -s \"$(pwd)\" /var/www/html"
+	// sockets is required by php-amqplib, pdo_pgsql by the Postgres repository.
+	// PHP_INI_DIR is set explicitly because sudo drops the image's environment.
+	"postCreateCommand": "sudo PHP_INI_DIR=/usr/local/etc/php docker-php-ext-install -j$(nproc) sockets && sudo apt-get update -qq && sudo apt-get install -y -qq libpq-dev && sudo PHP_INI_DIR=/usr/local/etc/php docker-php-ext-install -j$(nproc) pdo_pgsql"
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	// "remoteUser": "root"

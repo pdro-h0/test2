@@ -1,0 +1,7 @@
+parameters:
+    level: 8
+    # Code targets the 8.4 runtime of AGENTS.md, not the local PHP 8.5.
+    phpVersion: 80400
+    paths:
+        - src
+        - tests
