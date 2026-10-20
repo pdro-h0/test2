@@ -14,4 +14,17 @@ interface BatchRepository {
      * @return array{batch_id: int, message_ids: list<int>}
      */
     public function save(Batch $batch, array $recipients): array;
+
+    /**
+     * @return array{
+     *     batch_id: int,
+     *     subject: string,
+     *     html: string,
+     *     text: string,
+     *     from_email: string,
+     *     recipients: list<string>,
+     *     message_ids: list<int>,
+     * }|null
+     */
+    public function findByIdempotencyKey(int $clientId, string $idempotencyKey): ?array;
 }

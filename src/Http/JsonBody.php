@@ -9,7 +9,7 @@ use JsonException;
 
 final class JsonBody{
     private const MEGABYTE = 1024 * 1024;
-    // Guard against oversized bodies (2 MB); business limits (256 KB of HTML) belong to CreateBatch.
+    // Guard against oversized bodies (2 MB); business limits (256 KB of HTML) belong to CreateBatchUseCase.
     public const MAX_BYTES = 2 * self::MEGABYTE;
     private const JSON_MAX_DEPTH = 512;
 

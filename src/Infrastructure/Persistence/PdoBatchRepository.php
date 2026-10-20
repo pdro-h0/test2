@@ -29,6 +29,42 @@ final class PdoBatchRepository implements BatchRepository {
         return ['batch_id' => $batchId, 'message_ids' => $messageIds];
     }
 
+    public function findByIdempotencyKey(int $clientId, string $idempotencyKey): ?array {
+        $statement = $this->pdo->prepare(
+            'SELECT id, subject, html, text, from_email
+             FROM batches
+             WHERE client_id = ? AND idempotency_key = ?'
+        );
+        $statement->execute([$clientId, $idempotencyKey]);
+
+        $batch = $statement->fetch(PDO::FETCH_ASSOC);
+
+        if ($batch === false) return null;
+
+        $batchId = (int) $batch['id'];
+
+        $statement = $this->pdo->prepare('SELECT id, recipient FROM messages WHERE batch_id = ? ORDER BY id');
+        $statement->execute([$batchId]);
+
+        $recipients = [];
+        $messageIds = [];
+
+        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $recipients[] = (string) $row['recipient'];
+            $messageIds[] = (int) $row['id'];
+        }
+
+        return [
+            'batch_id' => $batchId,
+            'subject' => (string) $batch['subject'],
+            'html' => (string) $batch['html'],
+            'text' => (string) $batch['text'],
+            'from_email' => (string) $batch['from_email'],
+            'recipients' => $recipients,
+            'message_ids' => $messageIds,
+        ];
+    }
+
     private function insertBatch(Batch $batch): int {
         $statement = $this->pdo->prepare(
             'INSERT INTO batches (client_id, idempotency_key, subject, html, text, from_email)

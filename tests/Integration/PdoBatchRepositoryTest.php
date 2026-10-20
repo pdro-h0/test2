@@ -96,6 +96,39 @@ final class PdoBatchRepositoryTest extends TestCase
         self::assertSame(0, $this->countRows('outbox'));
     }
 
+    public function test_it_finds_a_batch_by_idempotency_key_with_recipients_and_message_ids(): void{
+        $saved = $this->repository->save($this->batch(), ['a@exemplo.com', 'b@exemplo.com']);
+
+        $found = $this->repository->findByIdempotencyKey($this->clientId, 'ABC-1');
+
+        self::assertNotNull($found);
+        self::assertSame($saved['batch_id'], $found['batch_id']);
+        self::assertSame('Seu pedido saiu', $found['subject']);
+        self::assertSame('<p>Olá</p>', $found['html']);
+        self::assertSame('Olá', $found['text']);
+        self::assertSame('loja@exemplo.com', $found['from_email']);
+        self::assertSame(['a@exemplo.com', 'b@exemplo.com'], $found['recipients']);
+        self::assertSame($saved['message_ids'], $found['message_ids']);
+    }
+
+    public function test_it_returns_null_for_an_unknown_key_or_another_client(): void{
+        $this->repository->save($this->batch(), ['a@exemplo.com']);
+
+        self::assertNull($this->repository->findByIdempotencyKey($this->clientId, 'OUTRA-CHAVE'));
+
+        $otherClientId = (new PdoClientRepository($this->pdo))->create(new Client(
+            id: null,
+            name: 'Outra',
+            apiKeyHash: hash('sha256', 'outra-chave'),
+            fromEmail: 'outra@exemplo.com',
+            fromName: null,
+            rateLimitPerSec: 10,
+            isActive: true,
+        ));
+
+        self::assertNull($this->repository->findByIdempotencyKey($otherClientId, 'ABC-1'));
+    }
+
     private function batch(): Batch{
         return new Batch(
             id: null,

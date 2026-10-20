@@ -177,8 +177,8 @@ Em dúvida, escolha o menor código que resolve. Não crie camada sem uso real.
   português.
 - `[O]` Classes em `PascalCase`; métodos em `camelCase`; tabelas, variáveis e
   colunas em `snake_case`; constantes e env em `UPPER_SNAKE`.
-- `[O]` Caso de uso = verbo + substantivo, sem sufixo: `CreateBatch`,
-  `SendMessage`, `GetStats`. Não use `...UseCase`, `...Service`,
+- `[O]` Caso de uso = verbo + substantivo + sufixo `UseCase`: `CreateBatchUseCase`,
+  `SendMessageUseCase`, `GetStatsUseCase`. Não use `...Service` nem
   `...Manager`.
 - `[O]` Interface sem prefixo `I`, nomeada pelo papel: `MessageRepository`,
   `Mailer`, `Publisher`. Implementação leva a tecnologia na frente:
@@ -205,11 +205,13 @@ src/
     Batch.php
     Message.php
     MessageStatus.php         # enum
+    Exception/
+      InvalidTransitionException.php
   Application/
-    CreateBatch.php           # um caso de uso por arquivo, plano
-    SendMessage.php
-    GetMessage.php
-    GetStats.php
+    CreateBatchUseCase.php    # um caso de uso por arquivo, plano
+    SendMessageUseCase.php
+    GetMessageUseCase.php
+    GetStatsUseCase.php
     Port/
       ClientRepository.php
       BatchRepository.php
@@ -283,6 +285,8 @@ docker-compose.yml
 - `[O]` Uma classe por arquivo; nome do arquivo = nome da classe. Sem `?>`.
 - `[O]` `readonly` e `enum` quando o valor não muda. `MessageStatus` é enum.
 - `[O]` Sem estado global, singleton ou static mutável.
+- `[O]` Sem números mágicos: número com significado vira constante nomeada
+  (`UPPER_SNAKE`) na própria classe. Ex.: `MAX_BYTES`, `JSON_MAX_DEPTH`.
 - `[O]` SQL sempre parametrizado. Nunca concatenar valor de requisição.
 - `[O]` Logs em JSON no stdout: `level`, `message_id`/`batch_id`, `client_id`,
   evento, erro. Nunca corpo, lista de destinatários, chave ou credencial.
@@ -324,11 +328,13 @@ docker compose up -d postgres rabbitmq mailpit   # dev, exige .env
 
 set -a; . ./.env; set +a
 php bin/migrate.php    # aplica migrations/*.sql; roda 2x sem reaplicar
+php bin/client.php "Loja" loja@exemplo.com "Loja" 10   # cria cliente, imprime a chave 1x
+
+XDEBUG_MODE=off php -S 127.0.0.1:8080 -t public public/index.php   # API em dev
 ```
 
-**Ainda não existem:** `bin/relay.php`, `bin/worker.php`, `bin/purge.php`,
-`bin/client.php`, `public/index.php` e os serviços `api`, `worker` e `relay` no
-compose.
+**Ainda não existem:** `bin/relay.php`, `bin/worker.php`, `bin/purge.php` e os
+serviços `api`, `worker` e `relay` no compose.
 
 ## Ambiente (fatos reais deste workspace)
 
@@ -355,7 +361,7 @@ compose.
    sempre: uma mensagem por destinatário.
 2. Logar HTML, corpo, lista de destinatários, API key ou credenciais — nem em
    debug, nem em exception handler, nem em teste.
-3. Hardcodar credenciais; commitar `.env`; imprimir a API key mais de uma vez
+3. Hardcodar credenciais; commitar, principalmente `.env`; imprimir a API key mais de uma vez
    (só na criação/rotação).
 4. Publicar no RabbitMQ fora da outbox, ou dar ack antes de persistir o
    resultado do envio.
