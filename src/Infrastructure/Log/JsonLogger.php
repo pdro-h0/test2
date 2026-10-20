@@ -16,7 +16,8 @@ final class JsonLogger{
 
     public static function stdout(): self{
         return new self(static function (string $line): void {
-            fwrite(STDOUT, $line . "\n");
+            // Writing to php://stdout works under php-fpm too; the STDOUT constant is CLI-only.
+            file_put_contents('php://stdout', $line . "\n");
         });
     }
 
