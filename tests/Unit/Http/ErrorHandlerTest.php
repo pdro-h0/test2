@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Http;
 
+use App\Domain\Exception\ConflictException;
 use App\Domain\Exception\UnauthorizedException;
 use App\Domain\Exception\ValidationException;
 use App\Http\ErrorHandler;
@@ -41,6 +42,16 @@ final class ErrorHandlerTest extends TestCase{
 
     public function test_it_maps_unauthorized_to_401(): void{
         self::assertSame(401, $this->handler->toResponse(new UnauthorizedException('invalid api key'))['status']);
+    }
+
+    public function test_it_maps_conflict_to_409(): void{
+        $response = $this->handler->toResponse(new ConflictException('idempotency key reused with a different payload'));
+
+        self::assertSame(409, $response['status']);
+        self::assertSame(
+            ['error' => ['code' => 'conflict', 'message' => 'idempotency key reused with a different payload']],
+            $response['body'],
+        );
     }
 
     public function test_it_logs_4xx_at_info_without_the_message(): void{

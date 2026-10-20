@@ -226,7 +226,8 @@ src/
     Queue/RabbitMqPublisher.php
     Log/JsonLogger.php
   Http/
-    Router.php
+    Dispatcher.php
+    Routes.php                # tabela de rotas
     ErrorHandler.php
     Auth.php
     Controller/*.php          # 1 por endpoint
