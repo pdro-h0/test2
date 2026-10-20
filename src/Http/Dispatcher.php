@@ -8,7 +8,7 @@ use App\Domain\Exception\MethodNotAllowedException;
 use App\Domain\Exception\NotFoundException;
 use Closure;
 
-final class Router{
+final class Dispatcher{
     /** @var array<string, array<string, Closure(): array{status:int, body:array<string, mixed>}>> */
     private array $routes = [];
 
