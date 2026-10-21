@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Http;
 
 final class Request {
+    /** @param array<string, string> $pathParams */
     public function __construct(
         public readonly ?string $authorization,
         public readonly string $rawBody,
         public readonly ?string $idempotencyKey,
+        public readonly array $pathParams = [],
     ) {
     }
 
@@ -18,5 +20,10 @@ final class Request {
             (string) file_get_contents('php://input'),
             isset($_SERVER['HTTP_IDEMPOTENCY_KEY']) ? (string) $_SERVER['HTTP_IDEMPOTENCY_KEY'] : null,
         );
+    }
+
+    /** @param array<string, string> $params */
+    public function withPathParams(array $params): self {
+        return new self($this->authorization, $this->rawBody, $this->idempotencyKey, $params);
     }
 }

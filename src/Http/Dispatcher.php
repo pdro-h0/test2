@@ -9,23 +9,41 @@ use App\Domain\Exception\NotFoundException;
 use Closure;
 
 final class Dispatcher{
-    /** @var array<string, array<string, Closure(Request): array{status:int, body:array<string, mixed>}>> */
+    /** @var list<array{regex: string, methods: array<string, Closure(Request): array{status:int, body:array<string, mixed>}>}> */
     private array $routes = [];
 
     /** @param Closure(Request): array{status:int, body:array<string, mixed>} $handler */
     public function add(string $method, string $path, Closure $handler): void{
-        $this->routes[$path][strtoupper($method)] = $handler;
+        // Paths are code literals, so {name} is replaced without preg_quote.
+        $regex = '#^' . preg_replace('#\{(\w+)\}#', '(?P<$1>[^/]+)', $path) . '$#';
+
+        foreach ($this->routes as $index => $route) {
+            if ($route['regex'] === $regex) {
+                $this->routes[$index]['methods'][strtoupper($method)] = $handler;
+                return;
+            }
+        }
+
+        $this->routes[] = ['regex' => $regex, 'methods' => [strtoupper($method) => $handler]];
     }
 
     /** @return array{status:int, body:array<string, mixed>} */
     public function dispatch(string $method, string $path, Request $request): array{
-        if (!isset($this->routes[$path])) throw new NotFoundException('not found');
+        foreach ($this->routes as $route) {
+            if (preg_match($route['regex'], $path, $matches) !== 1) {
+                continue;
+            }
 
-        $handler = $this->routes[$path][strtoupper($method)] ?? null;
-        if ($handler === null) {
-            throw new MethodNotAllowedException('method not allowed');
+            $handler = $route['methods'][strtoupper($method)] ?? null;
+            if ($handler === null) {
+                throw new MethodNotAllowedException('method not allowed');
+            }
+
+            $params = array_filter($matches, 'is_string', ARRAY_FILTER_USE_KEY);
+
+            return $handler($request->withPathParams($params));
         }
 
-        return $handler($request);
+        throw new NotFoundException('not found');
     }
 }

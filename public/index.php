@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use App\Application\CreateBatchUseCase;
+use App\Application\GetMessageUseCase;
 use App\Http\Auth;
 use App\Http\Controller\CreateBatchController;
+use App\Http\Controller\GetMessageController;
 use App\Http\Dispatcher;
 use App\Http\ErrorHandler;
 use App\Http\Request;
@@ -13,6 +15,7 @@ use App\Infrastructure\Env;
 use App\Infrastructure\Log\JsonLogger;
 use App\Infrastructure\Persistence\PdoBatchRepository;
 use App\Infrastructure\Persistence\PdoClientRepository;
+use App\Infrastructure\Persistence\PdoMessageRepository;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -31,13 +34,18 @@ try {
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION],
     );
 
-    $controller = new CreateBatchController(
+    $createBatch = new CreateBatchController(
         new Auth(new PdoClientRepository($pdo)),
         new CreateBatchUseCase(new PdoBatchRepository($pdo)),
     );
 
+    $getMessage = new GetMessageController(
+        new Auth(new PdoClientRepository($pdo)),
+        new GetMessageUseCase(new PdoMessageRepository($pdo)),
+    );
+
     $dispatcher = new Dispatcher();
-    Routes::register($dispatcher, $controller);
+    Routes::register($dispatcher, $createBatch, $getMessage);
 
     $path = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
     $request = Request::fromGlobals();
