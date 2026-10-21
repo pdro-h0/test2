@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Http;
 
 use App\Domain\Exception\ConflictException;
+use App\Domain\Exception\NotFoundException;
 use App\Domain\Exception\UnauthorizedException;
 use App\Domain\Exception\ValidationException;
 use App\Http\ErrorHandler;
@@ -42,6 +43,13 @@ final class ErrorHandlerTest extends TestCase{
 
     public function test_it_maps_unauthorized_to_401(): void{
         self::assertSame(401, $this->handler->toResponse(new UnauthorizedException('invalid api key'))['status']);
+    }
+
+    public function test_it_maps_not_found_to_404(): void{
+        $response = $this->handler->toResponse(new NotFoundException('message not found'));
+
+        self::assertSame(404, $response['status']);
+        self::assertSame(['error' => ['code' => 'not_found', 'message' => 'message not found']], $response['body']);
     }
 
     public function test_it_maps_conflict_to_409(): void{

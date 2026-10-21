@@ -36,7 +36,7 @@ final class ErrorHandler{
             $exception instanceof UnauthorizedException => [401, 'unauthorized', $exception->getMessage()],
             $exception instanceof ValidationException => [400, 'validation_error', $exception->getMessage()],
             $exception instanceof ConflictException => [409, 'conflict', $exception->getMessage()],
-            $exception instanceof NotFoundException => [404, 'not_found', 'not found'],
+            $exception instanceof NotFoundException => [404, 'not_found', $exception->getMessage()],
             $exception instanceof MethodNotAllowedException => [405, 'method_not_allowed', 'method not allowed'],
             default => [500, 'internal_error', 'internal error'],
         };
