@@ -39,6 +39,13 @@ final class CreateBatchUseCaseTest extends TestCase {
         self::assertCount(1, $this->batches->saved);
     }
 
+    public function test_it_drops_duplicate_recipients_keeping_the_first_occurrence(): void {
+        $result = $this->sut->run($this->client(), self::input(['a@exemplo.com', 'b@exemplo.com', 'a@exemplo.com']));
+
+        self::assertSame([1, 2], $result['message_ids']);
+        self::assertSame(['a@exemplo.com', 'b@exemplo.com'], $this->batches->saved[0]['recipients']);
+    }
+
     public function test_it_reuses_the_batch_for_the_same_key_and_payload(): void {
         $input = self::input(idempotencyKey: 'ABC-1');
 

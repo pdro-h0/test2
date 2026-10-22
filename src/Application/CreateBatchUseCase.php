@@ -115,6 +115,7 @@ final class CreateBatchUseCase {
         }
 
         $validated = [];
+        $seen = [];
 
         foreach ($recipients as $recipient) {
             if (!is_string($recipient)) {
@@ -122,6 +123,10 @@ final class CreateBatchUseCase {
             }
 
             $this->email($recipient);
+
+            if (isset($seen[$recipient])) continue;
+
+            $seen[$recipient] = true;
             $validated[] = $recipient;
         }
 
