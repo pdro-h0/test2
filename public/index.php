@@ -16,6 +16,7 @@ use App\Infrastructure\Log\JsonLogger;
 use App\Infrastructure\Persistence\PdoBatchRepository;
 use App\Infrastructure\Persistence\PdoClientRepository;
 use App\Infrastructure\Persistence\PdoMessageRepository;
+use App\Infrastructure\Persistence\PdoRateLimiter;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -36,7 +37,7 @@ try {
 
     $createBatch = new CreateBatchController(
         new Auth(new PdoClientRepository($pdo)),
-        new CreateBatchUseCase(new PdoBatchRepository($pdo)),
+        new CreateBatchUseCase(new PdoBatchRepository($pdo), new PdoRateLimiter($pdo)),
     );
 
     $getMessage = new GetMessageController(
@@ -60,4 +61,7 @@ try {
 
 http_response_code($response['status']);
 header('Content-Type: application/json');
+foreach ($response['headers'] ?? [] as $name => $value) {
+    header($name . ': ' . $value);
+}
 echo json_encode($response['body'], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);

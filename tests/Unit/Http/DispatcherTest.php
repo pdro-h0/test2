@@ -64,4 +64,21 @@ final class DispatcherTest extends TestCase{
 
         $dispatcher->dispatch('GET', '/messages/42/x', new Request(null, '', null));
     }
+
+    public function test_it_rejects_a_path_parameter_that_violates_the_declared_pattern(): void{
+        $dispatcher = new Dispatcher();
+        $dispatcher->add('GET', '/messages/{id:\d+}', static fn (Request $request): array => [
+            'status' => 200,
+            'body' => ['id' => $request->pathParams['id']],
+        ]);
+
+        self::assertSame(
+            ['status' => 200, 'body' => ['id' => '42']],
+            $dispatcher->dispatch('GET', '/messages/42', new Request(null, '', null)),
+        );
+
+        $this->expectException(NotFoundException::class);
+
+        $dispatcher->dispatch('GET', '/messages/42abc', new Request(null, '', null));
+    }
 }

@@ -20,6 +20,7 @@ use App\Infrastructure\Persistence\MigrationRunner;
 use App\Infrastructure\Persistence\PdoBatchRepository;
 use App\Infrastructure\Persistence\PdoClientRepository;
 use App\Infrastructure\Persistence\PdoMessageRepository;
+use App\Tests\Fake\InMemoryRateLimiter;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Throwable;
@@ -73,7 +74,10 @@ final class GetMessageControllerTest extends TestCase {
         $auth = new Auth($clients);
         Routes::register(
             $this->dispatcher,
-            new CreateBatchController($auth, new CreateBatchUseCase($batches)),
+            new CreateBatchController(
+                $auth,
+                new CreateBatchUseCase($batches, new InMemoryRateLimiter()),
+            ),
             new GetMessageController($auth, new GetMessageUseCase(new PdoMessageRepository($this->pdo))),
         );
         $this->errors = new ErrorHandler(new JsonLogger(static function (string $line): void {
@@ -113,6 +117,7 @@ final class GetMessageControllerTest extends TestCase {
 
     public function test_it_returns_404_for_a_non_numeric_id(): void{
         self::assertSame(404, $this->get('/messages/abc', self::OWNER_KEY)['status']);
+        self::assertSame(404, $this->get('/messages/' . $this->messageId . 'abc', self::OWNER_KEY)['status']);
     }
 
     /** @return array{status:int, body:array<string, mixed>} */

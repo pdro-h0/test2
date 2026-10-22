@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Application;
 
 use App\Application\Port\BatchRepository;
+use App\Application\Port\RateLimiter;
 use App\Domain\Batch;
 use App\Domain\Client;
 use App\Domain\Exception\ConflictException;
+use App\Domain\Exception\RateLimitException;
 use App\Domain\Exception\ValidationException;
 use LogicException;
 
@@ -18,12 +20,19 @@ final class CreateBatchUseCase {
     private const MAX_RECIPIENTS = 1000;
     private const MAX_IDEMPOTENCY_KEY_LENGTH = 128;
 
-    public function __construct(private readonly BatchRepository $batches) {
+    public function __construct(
+        private readonly BatchRepository $batches,
+        private readonly RateLimiter $rateLimiter,
+    ) {
     }
 
     /** @return array{batch_id: int, message_ids: list<int>, is_new: bool} */
     public function run(Client $client, CreateBatchInput $input): array {
         $clientId = $client->id ?? throw new LogicException('client must be persisted');
+
+        if (!$this->rateLimiter->allow($clientId, $client->rateLimitPerSec)) {
+            throw new RateLimitException('rate limit exceeded');
+        }
 
         $subject = $this->subject($input->subject);
         $html = $this->html($input->html);

@@ -15,6 +15,7 @@ use App\Infrastructure\Log\JsonLogger;
 use App\Infrastructure\Persistence\MigrationRunner;
 use App\Infrastructure\Persistence\PdoBatchRepository;
 use App\Infrastructure\Persistence\PdoClientRepository;
+use App\Infrastructure\Persistence\PdoRateLimiter;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Throwable;
@@ -61,7 +62,7 @@ final class CreateBatchControllerTest extends TestCase
 
         $this->controller = new CreateBatchController(
             new Auth($clients),
-            new CreateBatchUseCase(new PdoBatchRepository($this->pdo)),
+            new CreateBatchUseCase(new PdoBatchRepository($this->pdo), new PdoRateLimiter($this->pdo)),
         );
         $this->errors = new ErrorHandler(new JsonLogger(static function (string $line): void {
         }));
@@ -128,6 +129,24 @@ final class CreateBatchControllerTest extends TestCase
         self::assertSame(0, $this->countRows('batches'));
     }
 
+    public function test_it_returns_429_with_retry_after_when_the_client_is_over_the_limit(): void{
+        $this->pdo->beginTransaction();
+        $seed = $this->pdo->prepare(
+            "INSERT INTO rate_limits (client_id, window_start, hits)
+             SELECT id, date_trunc('second', now()), rate_limit_per_sec FROM clients WHERE id = ?"
+        );
+        $seed->execute([$this->clientId]);
+
+        $response = $this->post($this->payload());
+
+        $this->pdo->rollBack();
+
+        self::assertSame(429, $response['status']);
+        self::assertSame('rate_limit_exceeded', $response['body']['error']['code'] ?? null);
+        self::assertSame('1', $response['headers']['Retry-After'] ?? null);
+        self::assertSame(0, $this->countRows('batches'));
+    }
+
     /** @return array{subject:string, html:string, recipients:list<string>} */
     private function payload(): array{
         return [
@@ -141,7 +160,7 @@ final class CreateBatchControllerTest extends TestCase
      * Mirrors public/index.php: a thrown exception goes through the same ErrorHandler.
      *
      * @param array<string, mixed>|string $body
-     * @return array{status:int, body:array<string, mixed>}
+     * @return array{status:int, body:array<string, mixed>, headers?:array<string, string>}
      */
     private function post(array|string $body, ?string $idempotencyKey = null): array{
         $raw = is_string($body) ? $body : json_encode($body, JSON_THROW_ON_ERROR);

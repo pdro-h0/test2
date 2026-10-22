@@ -12,6 +12,7 @@ use App\Http\Auth;
 use App\Http\Controller\CreateBatchController;
 use App\Http\Request;
 use App\Tests\Fake\InMemoryBatchRepository;
+use App\Tests\Fake\InMemoryRateLimiter;
 use LogicException;
 use PHPUnit\Framework\TestCase;
 
@@ -62,6 +63,9 @@ final class CreateBatchControllerTest extends TestCase{
             }
         };
 
-        return new CreateBatchController(new Auth($clients), new CreateBatchUseCase(new InMemoryBatchRepository()));
+        return new CreateBatchController(
+            new Auth($clients),
+            new CreateBatchUseCase(new InMemoryBatchRepository(), new InMemoryRateLimiter()),
+        );
     }
 }

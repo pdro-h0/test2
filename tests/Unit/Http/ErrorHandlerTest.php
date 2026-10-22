@@ -6,6 +6,7 @@ namespace App\Tests\Unit\Http;
 
 use App\Domain\Exception\ConflictException;
 use App\Domain\Exception\NotFoundException;
+use App\Domain\Exception\RateLimitException;
 use App\Domain\Exception\UnauthorizedException;
 use App\Domain\Exception\ValidationException;
 use App\Http\ErrorHandler;
@@ -60,6 +61,17 @@ final class ErrorHandlerTest extends TestCase{
             ['error' => ['code' => 'conflict', 'message' => 'idempotency key reused with a different payload']],
             $response['body'],
         );
+    }
+
+    public function test_it_maps_rate_limit_to_429_with_retry_after(): void{
+        $response = $this->handler->toResponse(new RateLimitException('rate limit exceeded'));
+
+        self::assertSame(429, $response['status']);
+        self::assertSame(
+            ['error' => ['code' => 'rate_limit_exceeded', 'message' => 'rate limit exceeded']],
+            $response['body'],
+        );
+        self::assertSame(['Retry-After' => '1'], $response['headers']);
     }
 
     public function test_it_logs_4xx_at_info_without_the_message(): void{

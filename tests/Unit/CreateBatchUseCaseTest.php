@@ -8,18 +8,22 @@ use App\Application\CreateBatchInput;
 use App\Application\CreateBatchUseCase;
 use App\Domain\Client;
 use App\Domain\Exception\ConflictException;
+use App\Domain\Exception\RateLimitException;
 use App\Domain\Exception\ValidationException;
 use App\Tests\Fake\InMemoryBatchRepository;
+use App\Tests\Fake\InMemoryRateLimiter;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class CreateBatchUseCaseTest extends TestCase {
     private InMemoryBatchRepository $batches;
+    private InMemoryRateLimiter $rateLimiter;
     private CreateBatchUseCase $sut;
 
     protected function setUp(): void {
         $this->batches = new InMemoryBatchRepository();
-        $this->sut = new CreateBatchUseCase($this->batches);
+        $this->rateLimiter = new InMemoryRateLimiter();
+        $this->sut = new CreateBatchUseCase($this->batches, $this->rateLimiter);
     }
 
     public function test_it_creates_one_message_for_one_recipient(): void {
@@ -117,6 +121,14 @@ final class CreateBatchUseCaseTest extends TestCase {
         $result = $this->sut->run($this->client(), self::input(subject: str_repeat('á', 255)));
 
         self::assertTrue($result['is_new']);
+    }
+
+    public function test_it_rejects_the_request_when_the_client_is_over_the_rate_limit(): void {
+        $this->rateLimiter->allowed = false;
+
+        $this->expectException(RateLimitException::class);
+
+        $this->sut->run($this->client(), self::input());
     }
 
     /** @param CreateBatchInput $input */
