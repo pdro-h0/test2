@@ -114,6 +114,25 @@ final class CreateBatchControllerTest extends TestCase
         self::assertSame(1, $this->countRows('batches'));
     }
 
+    public function test_it_returns_200_for_the_same_payload_after_the_content_is_purged(): void{
+        $first = $this->post($this->payload(), 'ABC-1');
+        $this->purgeContent((int) ($first['body']['batch_id'] ?? 0));
+
+        $second = $this->post($this->payload(), 'ABC-1');
+
+        self::assertSame(200, $second['status']);
+        self::assertSame($first['body'], $second['body']);
+    }
+
+    public function test_it_returns_409_for_a_different_payload_after_the_content_is_purged(): void{
+        $first = $this->post($this->payload(), 'ABC-1');
+        $this->purgeContent((int) ($first['body']['batch_id'] ?? 0));
+
+        $response = $this->post(['subject' => 'Outro assunto'] + $this->payload(), 'ABC-1');
+
+        self::assertSame(409, $response['status']);
+    }
+
     public function test_it_returns_400_for_a_body_above_the_json_limit(): void{
         $response = $this->post(str_repeat('a', JsonBody::MAX_BYTES + 1));
 
@@ -170,6 +189,12 @@ final class CreateBatchControllerTest extends TestCase
         } catch (Throwable $exception) {
             return $this->errors->toResponse($exception);
         }
+    }
+
+    private function purgeContent(int $batchId): void{
+        $this->pdo
+            ->prepare("UPDATE batches SET html = '', text = '', html_purged_at = now() WHERE id = ?")
+            ->execute([$batchId]);
     }
 
     private function countRows(string $table): int{

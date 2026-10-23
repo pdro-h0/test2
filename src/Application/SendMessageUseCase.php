@@ -17,6 +17,7 @@ use Throwable;
 final class SendMessageUseCase {
     private const MAX_ATTEMPTS = 5;
     private const UNEXPECTED_ERROR = 'unexpected error';
+    private const CONTENT_EXPIRED = 'message content expired';
 
     public function __construct(
         private readonly MessageRepository $messages,
@@ -33,6 +34,17 @@ final class SendMessageUseCase {
         $message = $found['message'];
 
         if ($message->getStatus()->isTerminal()) {
+            return $message->getStatus();
+        }
+
+        if ($found['batch']->htmlPurgedAt !== null) {
+            if ($message->getStatus() === MessageStatus::Queued) {
+                $message->markSending();
+            }
+
+            $message->markFailed(self::CONTENT_EXPIRED);
+            $this->messages->save($message);
+
             return $message->getStatus();
         }
 

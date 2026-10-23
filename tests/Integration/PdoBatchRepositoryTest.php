@@ -15,6 +15,8 @@ use PHPUnit\Framework\TestCase;
 
 final class PdoBatchRepositoryTest extends TestCase
 {
+    private const PAYLOAD_HASH = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08';
+
     private PDO $pdo;
     private string $schema;
     private PdoBatchRepository $repository;
@@ -58,10 +60,11 @@ final class PdoBatchRepositoryTest extends TestCase
     }
 
     public function test_it_saves_batch_messages_and_outbox_in_one_transaction(): void{
-        $result = $this->repository->save($this->batch(), ['a@exemplo.com', 'b@exemplo.com', 'c@exemplo.com']);
+        $result = $this->repository->save($this->batch(), ['a@exemplo.com', 'b@exemplo.com', 'c@exemplo.com'], self::PAYLOAD_HASH);
 
         self::assertSame(1, $this->countRows('batches'));
         self::assertSame('ABC-1', $this->scalar('SELECT idempotency_key FROM batches WHERE id = ?', [$result['batch_id']]));
+        self::assertSame(self::PAYLOAD_HASH, $this->scalar('SELECT payload_hash FROM batches WHERE id = ?', [$result['batch_id']]));
         self::assertSame('loja@exemplo.com', $this->scalar('SELECT from_email FROM batches WHERE id = ?', [$result['batch_id']]));
         self::assertSame('Olá', $this->scalar('SELECT text FROM batches WHERE id = ?', [$result['batch_id']]));
 
@@ -85,7 +88,7 @@ final class PdoBatchRepositoryTest extends TestCase
 
     public function test_it_rolls_back_everything_when_a_message_fails(): void{
         try {
-            $this->repository->save($this->batch(), ['a@exemplo.com', 'b@exemplo.com', '']);
+            $this->repository->save($this->batch(), ['a@exemplo.com', 'b@exemplo.com', ''], self::PAYLOAD_HASH);
             self::fail('Expected the empty recipient to violate the check constraint.');
         } catch (PDOException) {
             // the check constraint on messages.recipient is the failure this test forces
@@ -97,7 +100,7 @@ final class PdoBatchRepositoryTest extends TestCase
     }
 
     public function test_it_finds_a_batch_by_idempotency_key_with_recipients_and_message_ids(): void{
-        $saved = $this->repository->save($this->batch(), ['a@exemplo.com', 'b@exemplo.com']);
+        $saved = $this->repository->save($this->batch(), ['a@exemplo.com', 'b@exemplo.com'], self::PAYLOAD_HASH);
 
         $found = $this->repository->findByIdempotencyKey($this->clientId, 'ABC-1');
 
@@ -107,12 +110,14 @@ final class PdoBatchRepositoryTest extends TestCase
         self::assertSame('<p>Olá</p>', $found['html']);
         self::assertSame('Olá', $found['text']);
         self::assertSame('loja@exemplo.com', $found['from_email']);
+        self::assertSame(self::PAYLOAD_HASH, $found['payload_hash']);
+        self::assertNull($found['html_purged_at']);
         self::assertSame(['a@exemplo.com', 'b@exemplo.com'], $found['recipients']);
         self::assertSame($saved['message_ids'], $found['message_ids']);
     }
 
     public function test_it_returns_null_for_an_unknown_key_or_another_client(): void{
-        $this->repository->save($this->batch(), ['a@exemplo.com']);
+        $this->repository->save($this->batch(), ['a@exemplo.com'], self::PAYLOAD_HASH);
 
         self::assertNull($this->repository->findByIdempotencyKey($this->clientId, 'OUTRA-CHAVE'));
 

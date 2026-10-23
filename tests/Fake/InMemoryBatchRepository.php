@@ -17,6 +17,8 @@ final class InMemoryBatchRepository implements BatchRepository {
      *     html: string,
      *     text: string,
      *     from_email: string,
+     *     payload_hash: ?string,
+     *     html_purged_at: ?string,
      *     recipients: list<string>,
      *     message_ids: list<int>,
      * }>
@@ -25,7 +27,7 @@ final class InMemoryBatchRepository implements BatchRepository {
 
     private int $nextMessageId = 1;
 
-    public function save(Batch $batch, array $recipients): array {
+    public function save(Batch $batch, array $recipients, string $payloadHash): array {
         $batchId = count($this->saved) + 1;
         $messageIds = [];
 
@@ -41,6 +43,8 @@ final class InMemoryBatchRepository implements BatchRepository {
             'html' => $batch->html,
             'text' => $batch->text,
             'from_email' => $batch->fromEmail,
+            'payload_hash' => $payloadHash,
+            'html_purged_at' => null,
             'recipients' => $recipients,
             'message_ids' => $messageIds,
         ];
@@ -60,6 +64,8 @@ final class InMemoryBatchRepository implements BatchRepository {
                 'html' => $row['html'],
                 'text' => $row['text'],
                 'from_email' => $row['from_email'],
+                'payload_hash' => $row['payload_hash'],
+                'html_purged_at' => $row['html_purged_at'],
                 'recipients' => $row['recipients'],
                 'message_ids' => $row['message_ids'],
             ];

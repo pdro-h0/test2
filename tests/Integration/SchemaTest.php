@@ -87,6 +87,55 @@ final class SchemaTest extends TestCase
         }
     }
 
+    public function test_it_rejects_a_payload_hash_that_is_not_64_hex_characters(): void {
+        $clientId = $this->client('a@exemplo.com');
+
+        try {
+            $this->insert(
+                'INSERT INTO batches (client_id, subject, html, text, from_email, payload_hash)
+                 VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
+                [$clientId, 'Assunto', '<p>Olá</p>', 'Olá', 'loja@exemplo.com', 'not-a-hash'],
+            );
+            self::fail('An invalid payload hash must be rejected.');
+        } catch (PDOException $e) {
+            self::assertSame('23514', (string) $e->getCode());
+        }
+    }
+
+    public function test_it_adds_payload_hash_to_an_existing_schema_without_losing_data(): void {
+        $schema = 'schema_upgrade_' . bin2hex(random_bytes(4));
+        $this->pdo->exec('CREATE SCHEMA ' . $schema);
+        $this->pdo->exec('SET search_path TO ' . $schema);
+
+        try {
+            $this->pdo->exec(
+                'CREATE TABLE schema_migrations (
+                    name text PRIMARY KEY,
+                    applied_at timestamptz NOT NULL DEFAULT now()
+                )'
+            );
+
+            foreach (['001_init.sql', '002_rate_limit.sql'] as $name) {
+                $sql = file_get_contents(__DIR__ . '/../../migrations/' . $name);
+                self::assertNotFalse($sql);
+                $this->pdo->exec($sql);
+                $this->pdo->prepare('INSERT INTO schema_migrations (name) VALUES (?)')->execute([$name]);
+            }
+
+            $clientId = $this->client('a@exemplo.com');
+            $batchId = $this->batch($clientId, 'pedido-1');
+
+            $applied = (new MigrationRunner($this->pdo, __DIR__ . '/../../migrations'))->run();
+
+            self::assertSame(['003_payload_hash.sql', '004_outbox_message_id.sql'], $applied);
+            self::assertSame('Assunto', $this->scalar('SELECT subject FROM batches WHERE id = ?', [$batchId]));
+            self::assertNull($this->scalar('SELECT payload_hash FROM batches WHERE id = ?', [$batchId]));
+        } finally {
+            $this->pdo->exec('SET search_path TO ' . $this->schema);
+            $this->pdo->exec('DROP SCHEMA ' . $schema . ' CASCADE');
+        }
+    }
+
     private function client(string $email): int{
         return $this->insert(
             'INSERT INTO clients (name, api_key_hash, from_email, rate_limit_per_sec)

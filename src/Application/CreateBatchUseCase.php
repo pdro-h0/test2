@@ -41,6 +41,7 @@ final class CreateBatchUseCase {
         $fromEmail = $this->email($input->from ?? $client->fromEmail);
         $recipients = $this->recipients($input->recipients);
         $idempotencyKey = $this->idempotencyKey($input->idempotencyKey);
+        $payloadHash = BatchPayloadHash::of($subject, $html, $text, $fromEmail, $recipients);
 
         $batch = new Batch(
             id: null,
@@ -56,7 +57,7 @@ final class CreateBatchUseCase {
             $existing = $this->batches->findByIdempotencyKey($clientId, $idempotencyKey);
 
             if ($existing !== null) {
-                if (!$this->isSamePayload($existing, $batch, $recipients)) {
+                if (!$this->isSamePayload($existing, $payloadHash)) {
                     throw new ConflictException('idempotency key reused with a different payload');
                 }
 
@@ -68,7 +69,7 @@ final class CreateBatchUseCase {
             }
         }
 
-        $saved = $this->batches->save($batch, $recipients);
+        $saved = $this->batches->save($batch, $recipients, $payloadHash);
 
         // shortcut: a concurrent request with the same key races past the lookup and dies on the unique constraint, catch SQLSTATE 23505 and re-read when duplicate retries show up
         return ['batch_id' => $saved['batch_id'], 'message_ids' => $saved['message_ids'], 'is_new' => true];
@@ -161,16 +162,27 @@ final class CreateBatchUseCase {
      *     html: string,
      *     text: string,
      *     from_email: string,
+     *     payload_hash: ?string,
+     *     html_purged_at: ?string,
      *     recipients: list<string>,
      *     message_ids: list<int>,
      * } $existing
-     * @param list<string> $recipients
      */
-    private function isSamePayload(array $existing, Batch $batch, array $recipients): bool {
-        return $existing['subject'] === $batch->subject
-            && $existing['html'] === $batch->html
-            && $existing['text'] === $batch->text
-            && $existing['from_email'] === $batch->fromEmail
-            && $existing['recipients'] === $recipients;
+    private function isSamePayload(array $existing, string $payloadHash): bool {
+        if ($existing['payload_hash'] !== null) {
+            return $existing['payload_hash'] === $payloadHash;
+        }
+
+        if ($existing['html_purged_at'] !== null) {
+            return false;
+        }
+
+        return BatchPayloadHash::of(
+            $existing['subject'],
+            $existing['html'],
+            $existing['text'],
+            $existing['from_email'],
+            $existing['recipients'],
+        ) === $payloadHash;
     }
 }

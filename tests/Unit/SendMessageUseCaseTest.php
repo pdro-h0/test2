@@ -80,6 +80,48 @@ final class SendMessageUseCaseTest extends TestCase {
         self::assertSame([], $this->mailer->recipients);
     }
 
+    public function test_it_fails_a_queued_message_with_purged_content_without_sending(): void {
+        $this->givenMessage(htmlPurgedAt: new DateTimeImmutable('2026-10-20T00:00:00+00:00'));
+
+        $status = $this->sut->run(10);
+
+        self::assertSame(MessageStatus::Failed, $status);
+        self::assertSame([], $this->mailer->recipients);
+        self::assertSame(1, $this->message()->getAttempts());
+        self::assertSame('message content expired', $this->message()->getLastError());
+    }
+
+    public function test_it_fails_a_sending_message_with_purged_content_without_sending(): void {
+        $this->givenMessage(
+            status: MessageStatus::Sending,
+            attempts: 3,
+            htmlPurgedAt: new DateTimeImmutable('2026-10-20T00:00:00+00:00'),
+        );
+
+        $status = $this->sut->run(10);
+
+        self::assertSame(MessageStatus::Failed, $status);
+        self::assertSame([], $this->mailer->recipients);
+        self::assertSame(4, $this->message()->getAttempts());
+        self::assertSame('message content expired', $this->message()->getLastError());
+    }
+
+    public function test_it_keeps_a_terminal_message_with_purged_content_unchanged(): void {
+        $this->givenMessage(
+            status: MessageStatus::Failed,
+            attempts: 2,
+            lastError: 'SMTP 550',
+            htmlPurgedAt: new DateTimeImmutable('2026-10-20T00:00:00+00:00'),
+        );
+
+        $status = $this->sut->run(10);
+
+        self::assertSame(MessageStatus::Failed, $status);
+        self::assertSame([], $this->mailer->recipients);
+        self::assertSame(2, $this->message()->getAttempts());
+        self::assertSame('SMTP 550', $this->message()->getLastError());
+    }
+
     public function test_it_treats_an_unknown_error_as_transient_without_detail(): void {
         $this->givenMessage();
         $this->mailer->error = new RuntimeException('boom: secret detail');
@@ -100,6 +142,8 @@ final class SendMessageUseCaseTest extends TestCase {
     private function givenMessage(
         MessageStatus $status = MessageStatus::Queued,
         int $attempts = 0,
+        ?string $lastError = null,
+        ?DateTimeImmutable $htmlPurgedAt = null,
     ): void {
         $this->messages->messages[10] = new Message(
             id: 10,
@@ -109,6 +153,7 @@ final class SendMessageUseCaseTest extends TestCase {
             createdAt: new DateTimeImmutable('2026-10-21T12:00:00+00:00'),
             status: $status,
             attempts: $attempts,
+            lastError: $lastError,
         );
 
         $this->messages->batches[10] = new Batch(
@@ -119,6 +164,7 @@ final class SendMessageUseCaseTest extends TestCase {
             html: '<p>Ola</p>',
             text: 'Ola',
             fromEmail: 'loja@exemplo.com',
+            htmlPurgedAt: $htmlPurgedAt,
         );
     }
 

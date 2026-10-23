@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit;
 
+use App\Application\BatchPayloadHash;
 use App\Application\CreateBatchInput;
 use App\Application\CreateBatchUseCase;
 use App\Domain\Client;
@@ -86,6 +87,60 @@ final class CreateBatchUseCaseTest extends TestCase {
         $this->sut->run($this->client(), self::input(['b@exemplo.com', 'a@exemplo.com'], idempotencyKey: 'ABC-1'));
     }
 
+    public function test_it_reuses_the_batch_after_the_content_is_purged(): void {
+        $input = self::input(idempotencyKey: 'ABC-1');
+
+        $first = $this->sut->run($this->client(), $input);
+        $this->purgeSavedBatch();
+
+        $second = $this->sut->run($this->client(), $input);
+
+        self::assertSame($first['batch_id'], $second['batch_id']);
+        self::assertSame($first['message_ids'], $second['message_ids']);
+        self::assertFalse($second['is_new']);
+    }
+
+    public function test_it_rejects_a_different_payload_after_the_content_is_purged(): void {
+        $this->sut->run($this->client(), self::input(idempotencyKey: 'ABC-1'));
+        $this->purgeSavedBatch();
+
+        $this->expectException(ConflictException::class);
+
+        $this->sut->run($this->client(), self::input(['b@exemplo.com'], idempotencyKey: 'ABC-1'));
+    }
+
+    public function test_it_rejects_the_same_key_when_the_purged_batch_has_no_hash(): void {
+        $input = self::input(idempotencyKey: 'ABC-1');
+        $this->sut->run($this->client(), $input);
+        $this->purgeSavedBatch();
+        $this->removeSavedPayloadHash();
+
+        $this->expectException(ConflictException::class);
+
+        $this->sut->run($this->client(), $input);
+    }
+
+    public function test_it_compares_an_old_batch_without_a_hash_using_the_stored_content(): void {
+        $input = self::input(idempotencyKey: 'ABC-1');
+
+        $first = $this->sut->run($this->client(), $input);
+        $this->removeSavedPayloadHash();
+
+        $second = $this->sut->run($this->client(), $input);
+
+        self::assertSame($first['batch_id'], $second['batch_id']);
+        self::assertFalse($second['is_new']);
+    }
+
+    public function test_it_rejects_a_different_payload_for_an_old_batch_without_a_hash(): void {
+        $this->sut->run($this->client(), self::input(idempotencyKey: 'ABC-1'));
+        $this->removeSavedPayloadHash();
+
+        $this->expectException(ConflictException::class);
+
+        $this->sut->run($this->client(), self::input(['b@exemplo.com'], idempotencyKey: 'ABC-1'));
+    }
+
     public function test_it_saves_a_new_batch_for_each_request_without_a_key(): void {
         $this->sut->run($this->client(), self::input());
         $this->sut->run($this->client(), self::input());
@@ -103,6 +158,18 @@ final class CreateBatchUseCaseTest extends TestCase {
         $this->sut->run($this->client(), self::input(text: 'texto puro'));
 
         self::assertSame('texto puro', $this->batches->saved[0]['text']);
+    }
+
+    public function test_it_hashes_the_normalized_payload(): void {
+        $this->sut->run($this->client(), self::input(
+            ['a@exemplo.com', 'a@exemplo.com'],
+            html: '<p>Olá <b>cliente</b></p>',
+        ));
+
+        self::assertSame(
+            BatchPayloadHash::of('Seu pedido saiu', '<p>Olá <b>cliente</b></p>', 'Olá cliente', 'loja@exemplo.com', ['a@exemplo.com']),
+            $this->batches->saved[0]['payload_hash'],
+        );
     }
 
     public function test_it_uses_the_client_sender_when_from_is_missing(): void {
@@ -178,6 +245,20 @@ final class CreateBatchUseCaseTest extends TestCase {
             recipients: $recipients,
             idempotencyKey: $idempotencyKey,
         );
+    }
+
+    private function purgeSavedBatch(): void {
+        $saved = $this->batches->saved[0];
+        $saved['html'] = '';
+        $saved['text'] = '';
+        $saved['html_purged_at'] = '2026-10-01T00:00:00+00:00';
+        $this->batches->saved[0] = $saved;
+    }
+
+    private function removeSavedPayloadHash(): void {
+        $saved = $this->batches->saved[0];
+        $saved['payload_hash'] = null;
+        $this->batches->saved[0] = $saved;
     }
 
     private function client(): Client {

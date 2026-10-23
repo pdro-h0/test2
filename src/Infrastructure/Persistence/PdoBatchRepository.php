@@ -13,11 +13,11 @@ final class PdoBatchRepository implements BatchRepository {
     public function __construct(private readonly PDO $pdo) {
     }
 
-    public function save(Batch $batch, array $recipients): array {
+    public function save(Batch $batch, array $recipients, string $payloadHash): array {
         $this->pdo->beginTransaction();
 
         try {
-            $batchId = $this->insertBatch($batch);
+            $batchId = $this->insertBatch($batch, $payloadHash);
             $messageIds = $this->insertMessages($batch, $batchId, $recipients);
             $this->pdo->commit();
         } catch (Throwable $exception) {
@@ -31,7 +31,7 @@ final class PdoBatchRepository implements BatchRepository {
 
     public function findByIdempotencyKey(int $clientId, string $idempotencyKey): ?array {
         $statement = $this->pdo->prepare(
-            'SELECT id, subject, html, text, from_email
+            'SELECT id, subject, html, text, from_email, payload_hash, html_purged_at
              FROM batches
              WHERE client_id = ? AND idempotency_key = ?'
         );
@@ -60,15 +60,17 @@ final class PdoBatchRepository implements BatchRepository {
             'html' => (string) $batch['html'],
             'text' => (string) $batch['text'],
             'from_email' => (string) $batch['from_email'],
+            'payload_hash' => $batch['payload_hash'] === null ? null : (string) $batch['payload_hash'],
+            'html_purged_at' => $batch['html_purged_at'] === null ? null : (string) $batch['html_purged_at'],
             'recipients' => $recipients,
             'message_ids' => $messageIds,
         ];
     }
 
-    private function insertBatch(Batch $batch): int {
+    private function insertBatch(Batch $batch, string $payloadHash): int {
         $statement = $this->pdo->prepare(
-            'INSERT INTO batches (client_id, idempotency_key, subject, html, text, from_email)
-             VALUES (:client_id, :idempotency_key, :subject, :html, :text, :from_email)
+            'INSERT INTO batches (client_id, idempotency_key, subject, html, text, from_email, payload_hash)
+             VALUES (:client_id, :idempotency_key, :subject, :html, :text, :from_email, :payload_hash)
              RETURNING id'
         );
         $statement->execute([
@@ -78,6 +80,7 @@ final class PdoBatchRepository implements BatchRepository {
             ':html' => $batch->html,
             ':text' => $batch->text,
             ':from_email' => $batch->fromEmail,
+            ':payload_hash' => $payloadHash,
         ]);
 
         return (int) $statement->fetchColumn();

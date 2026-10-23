@@ -15,7 +15,7 @@ use PDO;
 final class PdoMessageRepository implements MessageRepository {
     private const SELECT_WITH_BATCH = 'SELECT m.id, m.batch_id, m.client_id, m.recipient, m.status, m.attempts,
                m.last_error, m.created_at, m.sent_at,
-               b.subject, b.html, b.text, b.from_email, b.idempotency_key
+               b.subject, b.html, b.text, b.from_email, b.idempotency_key, b.html_purged_at
         FROM messages m
         JOIN batches b ON b.id = m.batch_id
         WHERE m.id = ?';
@@ -47,6 +47,7 @@ final class PdoMessageRepository implements MessageRepository {
          *     text: string,
          *     from_email: string,
          *     idempotency_key: string|null,
+         *     html_purged_at: string|null,
          * }|false $row
          */
         $row = $statement->fetch(PDO::FETCH_ASSOC);
@@ -110,7 +111,7 @@ final class PdoMessageRepository implements MessageRepository {
         );
     }
 
-    /** @param array{batch_id: int|string, client_id: int|string, subject: string, html: string, text: string, from_email: string, idempotency_key: string|null} $row */
+    /** @param array{batch_id: int|string, client_id: int|string, subject: string, html: string, text: string, from_email: string, idempotency_key: string|null, html_purged_at: string|null} $row */
     private function mapBatch(array $row): Batch {
         return new Batch(
             id: (int) $row['batch_id'],
@@ -120,6 +121,7 @@ final class PdoMessageRepository implements MessageRepository {
             html: $row['html'],
             text: $row['text'],
             fromEmail: $row['from_email'],
+            htmlPurgedAt: $row['html_purged_at'] === null ? null : new DateTimeImmutable($row['html_purged_at']),
         );
     }
 }

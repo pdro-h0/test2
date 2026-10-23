@@ -8,7 +8,15 @@ use Closure;
 use Throwable;
 
 final class JsonLogger{
-    private const FIELDS = ['batch_id', 'message_id', 'client_id', 'error'];
+    private const FIELDS = [
+        'batch_id',
+        'message_id',
+        'client_id',
+        'error',
+        'deleted_batches',
+        'hashed_batches',
+        'cleared_batches',
+    ];
 
     /** @param Closure(string): void $writer */
     public function __construct(private readonly Closure $writer) {

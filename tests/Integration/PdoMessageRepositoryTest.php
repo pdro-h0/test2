@@ -64,6 +64,22 @@ final class PdoMessageRepositoryTest extends TestCase {
         self::assertSame('<p>Olá</p>', $found['batch']->html);
         self::assertSame('Olá', $found['batch']->text);
         self::assertSame('loja@exemplo.com', $found['batch']->fromEmail);
+        self::assertNull($found['batch']->htmlPurgedAt);
+    }
+
+    public function test_it_reads_the_batch_purge_timestamp(): void {
+        $messageId = $this->saveBatch($this->clientId)[0];
+        $this->pdo->prepare(
+            "UPDATE batches SET html = '', text = '', html_purged_at = '2026-10-01 00:00:00+00'
+             WHERE id = (SELECT batch_id FROM messages WHERE id = ?)"
+        )->execute([$messageId]);
+
+        $found = $this->repository->findWithBatch($messageId);
+
+        self::assertNotNull($found);
+        self::assertSame('', $found['batch']->html);
+        self::assertSame('', $found['batch']->text);
+        self::assertSame('2026-10-01T00:00:00+00:00', $found['batch']->htmlPurgedAt?->format(DATE_ATOM));
     }
 
     public function test_it_returns_null_for_an_unknown_message_id(): void {
@@ -161,6 +177,7 @@ final class PdoMessageRepositoryTest extends TestCase {
                 fromEmail: 'loja@exemplo.com',
             ),
             ['a@exemplo.com', 'b@exemplo.com'],
+            str_repeat('a', 64),
         )['message_ids'];
     }
 

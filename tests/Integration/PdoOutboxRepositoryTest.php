@@ -160,6 +160,7 @@ final class PdoOutboxRepositoryTest extends TestCase {
                 fromEmail: 'loja@exemplo.com',
             ),
             ['a@exemplo.com', 'b@exemplo.com'],
+            str_repeat('a', 64),
         )['message_ids'];
     }
 

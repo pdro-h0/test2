@@ -67,7 +67,7 @@ final class GetMessageControllerTest extends TestCase {
             html: '<p>Olá</p>',
             text: 'Olá',
             fromEmail: 'loja@exemplo.com',
-        ), ['a@exemplo.com']);
+        ), ['a@exemplo.com'], str_repeat('a', 64));
         $this->messageId = $saved['message_ids'][0];
 
         $this->dispatcher = new Dispatcher();

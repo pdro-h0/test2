@@ -13,7 +13,7 @@ interface BatchRepository {
      * @param list<string> $recipients
      * @return array{batch_id: int, message_ids: list<int>}
      */
-    public function save(Batch $batch, array $recipients): array;
+    public function save(Batch $batch, array $recipients, string $payloadHash): array;
 
     /**
      * @return array{
@@ -22,6 +22,8 @@ interface BatchRepository {
      *     html: string,
      *     text: string,
      *     from_email: string,
+     *     payload_hash: ?string,
+     *     html_purged_at: ?string,
      *     recipients: list<string>,
      *     message_ids: list<int>,
      * }|null

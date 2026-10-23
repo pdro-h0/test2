@@ -183,6 +183,23 @@ final class RabbitMqWorkerTest extends TestCase {
         $this->assertDeadLettered($messageIds[0]);
     }
 
+    public function test_a_purged_content_message_is_dead_lettered_without_sending(): void {
+        $messageIds = $this->createMessages('worker purged content', ['purged@exemplo.com']);
+        $this->pdo
+            ->prepare("UPDATE batches SET html = '', text = '', html_purged_at = now()
+                       WHERE id = (SELECT batch_id FROM messages WHERE id = ?)")
+            ->execute([$messageIds[0]]);
+        $delivery = $this->publishFromOutbox($messageIds[0]);
+        $mailer = new RecordingMailer();
+
+        $this->worker($mailer)->handle($delivery);
+
+        self::assertSame('failed', $this->scalar('SELECT status FROM messages WHERE id = ?', [$messageIds[0]]));
+        self::assertSame('message content expired', $this->scalar('SELECT last_error FROM messages WHERE id = ?', [$messageIds[0]]));
+        self::assertSame([], $mailer->recipients);
+        $this->assertDeadLettered($messageIds[0]);
+    }
+
     public function test_a_redelivered_sent_message_is_not_sent_again(): void {
         $messageIds = $this->createMessages('worker redelivery', ['redelivery@exemplo.com']);
         $mailer = new RecordingMailer();
@@ -266,6 +283,7 @@ final class RabbitMqWorkerTest extends TestCase {
                 fromEmail: 'loja@exemplo.com',
             ),
             $recipients,
+            str_repeat('a', 64),
         )['message_ids'];
     }
 

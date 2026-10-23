@@ -109,6 +109,21 @@ final class RabbitMqWorkerTest extends TestCase {
         self::assertSame('message_dead_lettered', $this->loggedEvent());
     }
 
+    public function test_it_dead_letters_expired_content_before_acknowledging(): void {
+        $this->givenMessage(htmlPurged: true);
+
+        $this->worker->handle($this->delivery('{"message_id":10}'));
+
+        self::assertSame([
+            ['publish', 'emails.dlq', '{"message_id":10}'],
+            ['ack', 1],
+        ], $this->calls);
+        self::assertSame([], $this->mailer->recipients);
+        self::assertSame(MessageStatus::Failed, $this->messages->messages[self::MESSAGE_ID]->getStatus());
+        self::assertSame('message content expired', $this->messages->messages[self::MESSAGE_ID]->getLastError());
+        self::assertSame('message_dead_lettered', $this->loggedEvent());
+    }
+
     public function test_a_rejected_publication_prevents_the_acknowledgement(): void {
         $this->givenMessage();
         $this->mailer->error = new TransientDeliveryException('SMTP 451');
@@ -220,7 +235,7 @@ final class RabbitMqWorkerTest extends TestCase {
         $this->worker->run();
     }
 
-    private function givenMessage(): void {
+    private function givenMessage(bool $htmlPurged = false): void {
         $this->messages->messages[self::MESSAGE_ID] = new Message(
             id: self::MESSAGE_ID,
             batchId: 1,
@@ -237,6 +252,7 @@ final class RabbitMqWorkerTest extends TestCase {
             html: '<p>Ola</p>',
             text: 'Ola',
             fromEmail: 'loja@exemplo.com',
+            htmlPurgedAt: $htmlPurged ? new DateTimeImmutable('2026-10-20T00:00:00+00:00') : null,
         );
     }
 

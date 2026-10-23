@@ -61,6 +61,26 @@ final class JsonLoggerTest extends TestCase{
         );
     }
 
+    public function test_it_keeps_purge_totals_and_drops_content(): void{
+        $this->logger->info('purge_completed', [
+            'deleted_batches' => 3,
+            'hashed_batches' => 4,
+            'cleared_batches' => 5,
+            'html' => '<p>Olá</p>',
+        ]);
+
+        self::assertSame(
+            [
+                'level' => 'info',
+                'event' => 'purge_completed',
+                'deleted_batches' => 3,
+                'hashed_batches' => 4,
+                'cleared_batches' => 5,
+            ],
+            $this->decodedOutput()
+        );
+    }
+
     public function test_it_writes_error_with_class_and_message(): void{
         $this->logger->error('send_failed', new RuntimeException('smtp timeout'), ['message_id' => 8]);
 
