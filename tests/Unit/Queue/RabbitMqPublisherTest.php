@@ -46,6 +46,49 @@ final class RabbitMqPublisherTest extends TestCase {
         (new RabbitMqPublisher($this->channel))->publish(456);
     }
 
+    public function test_it_publishes_a_retry_as_persistent_json_and_waits_for_confirmation(): void {
+        $this->channel->expects(self::once())->method('basic_publish')->with(
+            self::callback(static fn (AMQPMessage $message): bool =>
+                $message->getBody() === '{"message_id":456}'
+                && $message->get('content_type') === 'application/json'
+                && $message->get('delivery_mode') === AMQPMessage::DELIVERY_MODE_PERSISTENT),
+            '',
+            'emails.retry',
+            true,
+        );
+        $this->channel->expects(self::once())->method('wait_for_pending_acks_returns')->with(5);
+
+        (new RabbitMqPublisher($this->channel))->publishRetry(456);
+    }
+
+    public function test_it_publishes_a_dead_letter_as_persistent_json_and_waits_for_confirmation(): void {
+        $this->channel->expects(self::once())->method('basic_publish')->with(
+            self::callback(static fn (AMQPMessage $message): bool =>
+                $message->getBody() === '{"message_id":456}'
+                && $message->get('content_type') === 'application/json'
+                && $message->get('delivery_mode') === AMQPMessage::DELIVERY_MODE_PERSISTENT),
+            '',
+            'emails.dlq',
+            true,
+        );
+        $this->channel->expects(self::once())->method('wait_for_pending_acks_returns')->with(5);
+
+        (new RabbitMqPublisher($this->channel))->publishFailed(456);
+    }
+
+    public function test_it_publishes_an_invalid_payload_without_copying_the_original_body(): void {
+        $this->channel->expects(self::once())->method('basic_publish')->with(
+            self::callback(static fn (AMQPMessage $message): bool =>
+                $message->getBody() === '{"error":"invalid_payload"}'
+                && $message->get('delivery_mode') === AMQPMessage::DELIVERY_MODE_PERSISTENT),
+            '',
+            'emails.dlq',
+            true,
+        );
+
+        (new RabbitMqPublisher($this->channel))->publishInvalid();
+    }
+
     #[DataProvider('rejections')]
     public function test_it_rejects_nacks_and_returns_without_contaminating_the_next_publish(string $kind): void {
         $publisher = new RabbitMqPublisher($this->channel);

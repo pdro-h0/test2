@@ -7,6 +7,7 @@ namespace App\Tests\Fake;
 use App\Application\Port\MessageRepository;
 use App\Domain\Batch;
 use App\Domain\Message;
+use Throwable;
 
 final class InMemoryMessageRepository implements MessageRepository {
     /** @var array<int, Message> */
@@ -14,6 +15,8 @@ final class InMemoryMessageRepository implements MessageRepository {
 
     /** @var array<int, Batch> keyed by message id */
     public array $batches = [];
+
+    public ?Throwable $saveError = null;
 
     public function find(int $id): ?Message {
         return $this->messages[$id] ?? null;
@@ -31,6 +34,10 @@ final class InMemoryMessageRepository implements MessageRepository {
     }
 
     public function save(Message $message): void {
+        if ($this->saveError !== null) {
+            throw $this->saveError;
+        }
+
         if ($message->id !== null) {
             $this->messages[$message->id] = $message;
         }

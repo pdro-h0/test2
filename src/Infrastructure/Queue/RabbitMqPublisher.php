@@ -41,18 +41,35 @@ final class RabbitMqPublisher implements Publisher {
     }
 
     public function publish(int $messageId): void {
+        $this->publishTo(['message_id' => $messageId], 'emails');
+    }
+
+    public function publishRetry(int $messageId): void {
+        $this->publishTo(['message_id' => $messageId], 'emails.retry');
+    }
+
+    public function publishFailed(int $messageId): void {
+        $this->publishTo(['message_id' => $messageId], 'emails.dlq');
+    }
+
+    public function publishInvalid(): void {
+        $this->publishTo(['error' => 'invalid_payload'], 'emails.dlq');
+    }
+
+    /** @param array{message_id: int}|array{error: string} $payload */
+    private function publishTo(array $payload, string $queue): void {
         if (!$this->isAvailable) {
             throw new PublishException('RabbitMQ publisher requires a new channel');
         }
 
         $this->isRejected = false;
-        $message = new AMQPMessage(json_encode(['message_id' => $messageId], JSON_THROW_ON_ERROR), [
+        $message = new AMQPMessage(json_encode($payload, JSON_THROW_ON_ERROR), [
             'content_type' => 'application/json',
             'delivery_mode' => AMQPMessage::DELIVERY_MODE_PERSISTENT,
         ]);
 
         try {
-            $this->channel->basic_publish($message, '', 'emails', true);
+            $this->channel->basic_publish($message, '', $queue, true);
             $this->channel->wait_for_pending_acks_returns(self::CONFIRM_TIMEOUT_SECONDS);
         } catch (AMQPExceptionInterface) {
             $this->isAvailable = false;
