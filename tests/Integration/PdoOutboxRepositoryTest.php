@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration;
 
+use App\Application\Exception\PublishException;
 use App\Domain\Batch;
 use App\Domain\Client;
 use App\Infrastructure\Persistence\MigrationRunner;
 use App\Infrastructure\Persistence\PdoBatchRepository;
 use App\Infrastructure\Persistence\PdoClientRepository;
 use App\Infrastructure\Persistence\PdoOutboxRepository;
+use App\Tests\Fake\RecordingPublisher;
 use PDO;
 use PHPUnit\Framework\TestCase;
 
@@ -94,6 +96,45 @@ final class PdoOutboxRepositoryTest extends TestCase {
         self::assertSame([], $otherPending);
 
         $this->pdo->rollBack();
+    }
+
+    public function test_it_publishes_one_pending_row_and_marks_it_published(): void {
+        $messageIds = $this->saveBatch();
+        $publisher = new RecordingPublisher();
+
+        $published = $this->repository->publishNext($publisher);
+
+        self::assertNotNull($published);
+        self::assertSame($messageIds[0], $published['message_id']);
+        self::assertSame([$messageIds[0]], $publisher->published);
+        self::assertNotNull($this->scalar('SELECT published_at FROM outbox WHERE message_id = ?', [$messageIds[0]]));
+        self::assertNull($this->scalar('SELECT published_at FROM outbox WHERE message_id = ?', [$messageIds[1]]));
+    }
+
+    public function test_a_failed_publish_keeps_the_row_pending(): void {
+        $messageIds = $this->saveBatch();
+        $publisher = new RecordingPublisher();
+        $publisher->error = new PublishException('broker down');
+
+        try {
+            $this->repository->publishNext($publisher);
+            self::fail('publishNext should have thrown');
+        } catch (PublishException) {
+        }
+
+        self::assertSame([], $publisher->published);
+        self::assertNull($this->scalar('SELECT published_at FROM outbox WHERE message_id = ?', [$messageIds[0]]));
+    }
+
+    public function test_it_does_not_publish_the_same_row_twice(): void {
+        $messageIds = $this->saveBatch();
+        $publisher = new RecordingPublisher();
+
+        $this->repository->publishNext($publisher);
+        $this->repository->publishNext($publisher);
+
+        self::assertNull($this->repository->publishNext($publisher));
+        self::assertSame($messageIds, $publisher->published);
     }
 
     /** @return list<int> */

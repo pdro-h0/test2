@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Infrastructure\Persistence;
 
 use App\Application\Port\OutboxRepository;
+use App\Application\Port\Publisher;
 use PDO;
+use Throwable;
 
 final class PdoOutboxRepository implements OutboxRepository {
     public function __construct(private readonly PDO $pdo) {
@@ -36,5 +38,36 @@ final class PdoOutboxRepository implements OutboxRepository {
         $this->pdo
             ->prepare('UPDATE outbox SET published_at = now() WHERE id = ?')
             ->execute([$id]);
+    }
+
+    /**
+     * Publishes one pending row and commits only after the broker confirms.
+     *
+     * @return array{id: int, message_id: int}|null
+     */
+    public function publishNext(Publisher $publisher): ?array {
+        // shortcut: a crash between the broker confirm and the commit republishes the message, at-least-once by design
+        $this->pdo->beginTransaction();
+
+        try {
+            $pending = $this->lockPending(1);
+
+            if ($pending === []) {
+                $this->pdo->rollBack();
+
+                return null;
+            }
+
+            $row = $pending[0];
+            $publisher->publish($row['message_id']);
+            $this->markPublished($row['id']);
+            $this->pdo->commit();
+
+            return $row;
+        } catch (Throwable $exception) {
+            $this->pdo->rollBack();
+
+            throw $exception;
+        }
     }
 }
