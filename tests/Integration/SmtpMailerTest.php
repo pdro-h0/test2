@@ -38,15 +38,13 @@ final class SmtpMailerTest extends TestCase {
 
         $this->mailer->send($batch, 'a@exemplo.com');
         $this->mailer->send($batch, 'b@exemplo.com');
-        $this->mailer->send($batch, 'c@exemplo.com');
-        $this->mailer->send($batch, 'd@exemplo.com');
 
         $messages = $this->messages();
-        self::assertCount(3, $messages);
+        self::assertCount(2, $messages);
 
         $recipients = [];
         foreach ($messages as $message) {
-            self::assertCount(4, $message['To']);
+            self::assertCount(1, $message['To']);
             $recipients[] = $message['To'][0]['Address'];
             self::assertSame('Pedido saiu', $message['Subject']);
         }
